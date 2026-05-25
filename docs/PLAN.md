@@ -2,12 +2,14 @@
 
 ## Summary
 
-Projeto open source separado, em **Node/TypeScript**, que roda ao lado da Evolution API como companion extension. Não altera o core da Evolution: consome webhooks e API públicas, captura texto, transcreve áudio e vídeo, e entrega JSON organizado pronto para ser consumido por agentes (OpenClaw/Ford ou outros).
+Projeto open source separado, em **Node/TypeScript**, que roda ao lado da Evolution API como companion extension. Não altera o core da Evolution: consome webhooks e API públicas, captura texto, transcreve áudio e vídeo, importa históricos quando disponíveis, e entrega JSON/corpus organizado pronto para ser consumido por agentes (OpenClaw/Ford ou outros).
 
 **Separação de responsabilidades:**
 
 - **`wa-digest` (este projeto, público)**: camada de captura, transcrição e organização. Devolve transcrições estruturadas e timelines normalizadas. Sem opinião sobre síntese.
 - **Skill OpenClaw (privado, fora deste repo)**: contém os templates de sumarização/síntese por grupo, prompts, regras de formatação e tom. Consome o JSON do serviço e produz a resposta final via LLM.
+
+O produto principal não é apenas "resumo de um grupo". A unidade básica é uma mensagem normalizada por `instance` + `chatJid`, e o produto de valor é um **corpus textual estruturado** que pode agregar múltiplos grupos/chats por coleções nomeadas (ex.: `tech`, `ctos`, `ai`, `healthtechs`). O agente consumidor decide como sintetizar esse corpus.
 
 A Evolution continua como backbone de backup/contexto. Baileys direto não será usado no v1; só entraria futuramente como adaptador avançado se uma versão pública da Evolution não expuser mídia antiga.
 
@@ -17,24 +19,40 @@ Em vez de tentar entregar toda a API surface de uma vez, dividir em três fases.
 
 ### Fase 1 - MVP funcional (caminho crítico)
 
-Objetivo: provar o fluxo ponta-a-ponta com um grupo real.
+Objetivo: provar o fluxo ponta-a-ponta com um grupo real e mídia nova.
 
 - Webhook ingest (`POST /v1/evolution/webhook/:instance`)
 - Persistência idempotente de mensagens (texto + metadados de mídia)
 - Pipeline de transcrição de áudio via Soniox
 - Endpoint único: `GET /v1/groups/:jid/digest?hours=24` retornando JSON com timeline + transcrições organizadas (sem síntese; isso é responsabilidade da skill OpenClaw)
+- Status explícito por item (`processing`, `transcribed`, `metadata_only`, `unavailable`, `failed`)
 - Docker image + exemplo de Docker Compose
 
-### Fase 2 - Cobertura multimodal e granularidade
+### Fase 2 - Corpus multi-grupo e histórico
 
-- OCR/descrição de imagens
-- Vídeo: extração e transcrição do **áudio** (sem amostragem de frames; escopo cortado por custo e complexidade)
+- Collections nomeadas de grupos/chats (`tech`, `ctos`, `ai`, etc.) configuradas por arquivo/env/API.
+- Export de corpus agregado para agentes:
+  - `GET /v1/collections/:name/timeline?from=...&to=...`
+  - `GET /v1/collections/:name/corpus?from=...&to=...&format=jsonl|markdown|text`
+- Backfill histórico a partir do Postgres da Evolution:
+  - `POST /v1/collections/:name/backfill`
+  - `POST /v1/chats/:jid/backfill`
+- Importador de ZIP oficial do WhatsApp:
+  - `POST /v1/imports/whatsapp-zip`
+  - `digestctl import-whatsapp-zip arquivo.zip --chat <jid|nome> --instance <instance>` pode existir antes do restante do CLI operacional.
+  - parseia `_chat.txt`, indexa mídias anexas, transcreve áudio/vídeo e mistura ao mesmo corpus.
+- Tratamento explícito de completude:
+  - `complete`
+  - `processing`
+  - `partial_media_unavailable`
+  - `failed_items`
 - `GET /v1/chats/:jid/timeline?hours=24` (granularidade por chat individual, não só grupos)
 - `GET /v1/messages/:messageId/analysis` (análise de uma mensagem específica)
-- Tratamento explícito de mídia indisponível (marcar no JSON quando só houver metadados)
 
-### Fase 3 - Operação e ergonomia
+### Fase 3 - Cobertura multimodal e operação
 
+- OCR/descrição de imagens.
+- Vídeo: extração e transcrição do **áudio** (sem amostragem de frames; escopo cortado por custo e complexidade).
 - CLI `digestctl` (incluindo `digestctl doctor` e `digestctl update`)
 - `GET /v1/groups` (listagem)
 - Multi-tenant tokens (token por instância/escopo, não único global)
@@ -59,6 +77,42 @@ Objetivo: provar o fluxo ponta-a-ponta com um grupo real.
 - Tentar endpoint público de `getBase64` quando disponível.
 - Marcar mídia antiga indisponível quando só houver metadados e nenhuma rota pública/storage.
 - **Idempotência**: dedup por `messageId` na ingestão; webhooks podem chegar duplicados em retries/reconexões.
+- **Backfill histórico best-effort**:
+  - ler mensagens já existentes no Postgres da Evolution;
+  - opcionalmente solicitar mais histórico via rotas públicas da Evolution quando disponíveis;
+  - tentar baixar mídia antiga por storage/URL/getBase64;
+  - nunca prometer recuperação integral de mídia que só existe no celular.
+
+### Pregressos e garantias
+
+WA Digest deve diferenciar três cenários:
+
+1. **Future Capture**: mídia recebida depois da instalação/configuração.
+   - Objetivo: confiável.
+   - Requer Evolution configurada com storage (`mediaUrl`/S3/MinIO), `webhookBase64` ou endpoint público de mídia funcional.
+   - A mídia é arquivada/transcrita assim que chega, antes de depender de disponibilidade futura do WhatsApp/CDN.
+
+2. **History Backfill via Evolution/Baileys**: mensagens e mídias anteriores à instalação.
+   - Objetivo: best-effort.
+   - Texto e metadados têm boa chance quando o history sync está disponível.
+   - Bytes de mídia antiga não são garantidos, mesmo que a mídia exista no celular do usuário.
+   - Motivo: Evolution/Baileys opera como dispositivo vinculado WhatsApp Web/Multi-device; ele não tem acesso direto ao banco/cache local do app no telefone nem consegue executar o "Export Chat" oficial remotamente.
+
+3. **WhatsApp Export ZIP Import**: ZIP gerado pelo app oficial do WhatsApp com mídia.
+   - Objetivo: caminho mais confiável para acervo histórico quando o celular consegue exportar.
+   - WA Digest importa o ZIP, parseia o `.txt`, associa os arquivos de mídia, transcreve áudio/vídeo e injeta tudo no corpus.
+   - Limitação: depende dos limites e falhas do próprio recurso de exportação oficial do WhatsApp.
+
+Status obrigatórios para mídia pregressa:
+
+- `available`
+- `transcribed`
+- `metadata_only`
+- `unavailable_from_whatsapp`
+- `failed_download`
+- `imported_from_zip`
+
+Não há promessa de "sync completo de mídia antiga" via Evolution/Baileys. Há promessa de captura futura robusta e de backfill/importação com status transparente.
 
 ### Persistência
 
@@ -70,6 +124,11 @@ Objetivo: provar o fluxo ponta-a-ponta com um grupo real.
   - `digest.messages`: uma linha por mensagem, PK em `(instance, message_id)` para idempotência;
   - `digest.media`: referência ao arquivo (path local ou URL) + status de processamento;
   - `digest.transcriptions`: texto transcrito, provider usado, custo/duração, FK para `messages`.
+- **Tabelas adicionais (Fase 2)**:
+  - `digest.collections`: coleções nomeadas de chats/grupos;
+  - `digest.collection_chats`: associação de collection -> `chatJid`;
+  - `digest.imports`: imports de ZIP/backfill com origem, status e contadores;
+  - `digest.jobs`: opcional se a fila escolhida não criar sua própria tabela.
 
 ### Fila e backpressure
 
@@ -83,9 +142,33 @@ Objetivo: provar o fluxo ponta-a-ponta com um grupo real.
 
 - **Texto**: timeline normalizada por chat/grupo.
 - **Áudio**: transcrição via provider configurável.
-- **Imagem** (Fase 2): OCR/descrição visual.
-- **Vídeo** (Fase 2): **apenas extração e transcrição do áudio** via `ffmpeg`. Não há amostragem/análise de frames; cortado por custo e por não ser caminho crítico.
+- **Imagem** (Fase 3): OCR/descrição visual.
+- **Vídeo** (Fase 3): **apenas extração e transcrição do áudio** via `ffmpeg`. Não há amostragem/análise de frames; cortado por custo e por não ser caminho crítico.
 - Saída final do serviço: JSON com timeline organizada + transcrições + falhas por item. **Sem síntese/sumarização**; isso é responsabilidade do consumidor (skill OpenClaw).
+
+### Collections e corpus para agentes
+
+- Uma collection é uma lista nomeada de `chatJid` dentro de uma `instance`.
+- Collections podem representar temas ou fontes, não apenas grupos:
+  - `tech`
+  - `ctos`
+  - `ai`
+  - `healthtechs`
+  - `family`
+- Grupos dentro de comunidades são tratados como chats normais quando a Evolution só expuser `chatJid`. Se a Evolution expuser metadados de comunidade, persistir como metadado adicional, não como requisito de funcionamento.
+- O corpus exportado deve preservar:
+  - `instance`
+  - `chatJid`
+  - `chatName` quando disponível
+  - `messageId`
+  - `timestamp`
+  - `senderName`/`participantJid`
+  - texto original
+  - transcrição de áudio/vídeo
+  - captions/descrições/OCR quando disponíveis
+  - status de mídia/transcrição
+  - origem (`webhook`, `evolution_backfill`, `whatsapp_zip_import`)
+- O corpus deve ser retornável em JSON estruturado e formatos lineares (`jsonl`, `markdown`, `text`) para facilitar ingestão por agentes e LLMs.
 
 ### Transcrição
 
@@ -103,6 +186,11 @@ Objetivo: provar o fluxo ponta-a-ponta com um grupo real.
 
 **Fase 2:**
 
+- `GET /v1/collections/:name/timeline?from=...&to=...`
+- `GET /v1/collections/:name/corpus?from=...&to=...&format=jsonl|markdown|text`
+- `POST /v1/collections/:name/backfill`
+- `POST /v1/chats/:jid/backfill`
+- `POST /v1/imports/whatsapp-zip`
 - `GET /v1/chats/:jid/timeline?hours=24`
 - `GET /v1/messages/:messageId/analysis`
 
@@ -115,9 +203,9 @@ Objetivo: provar o fluxo ponta-a-ponta com um grupo real.
 
 - A skill OpenClaw é **fina em código mas espessa em conteúdo**: ela carrega os templates privados de sumarização/síntese específicos para cada grupo (tom, formato, prioridades, regras editoriais).
 - Fluxo:
-  1. Skill chama `GET /v1/groups/:jid/digest?hours=24` no serviço.
-  2. Recebe JSON estruturado com transcrições e timeline.
-  3. Aplica o template apropriado para aquele grupo.
+  1. Skill chama `GET /v1/groups/:jid/digest?hours=24` para um grupo ou `GET /v1/collections/:name/corpus?...` para múltiplos grupos.
+  2. Recebe JSON/corpus estruturado com texto, transcrições e timeline.
+  3. Aplica o template apropriado para aquele grupo/collection.
   4. Envia ao LLM para síntese final.
   5. Devolve resposta natural ao usuário.
 - A Ford não baixa, não transcreve nem sumariza mídia diretamente: toda a captura é delegada ao serviço, toda a inteligência editorial fica na skill.
@@ -149,6 +237,9 @@ Objetivo: provar o fluxo ponta-a-ponta com um grupo real.
 - `SONIOX_API_KEY`
 - `MEDIA_STORAGE_DIR`
 - `MAX_CONCURRENT_TRANSCRIPTIONS` (default conservador)
+- `MAX_TRANSCRIPTION_MINUTES_PER_DAY`
+- `COLLECTIONS_CONFIG_PATH` (opcional, para mapear collections -> chats)
+- `HISTORY_BACKFILL_ENABLED`
 - `OPENCLAW_COMPAT=true`
 
 ## Test Plan
@@ -160,6 +251,8 @@ Objetivo: provar o fluxo ponta-a-ponta com um grupo real.
 - Facade de transcrição (mock providers, comportamento em falha, retry).
 - Sanitização de entrada.
 - Dedup idempotente de `messageId`.
+- Resolução de collections e export de corpus multi-grupo.
+- Parser de ZIP exportado pelo WhatsApp (`_chat.txt` + anexos).
 
 ### Integration
 
@@ -167,6 +260,9 @@ Objetivo: provar o fluxo ponta-a-ponta com um grupo real.
 - Worker consumindo fila e gravando no Postgres.
 - Webhook duplicado -> uma única linha persistida.
 - Provider de transcrição em falha -> mensagem aparece no digest com `transcription_status: failed`.
+- Backfill lendo mensagens existentes do Postgres da Evolution.
+- Import ZIP -> mensagens e mídias indexadas no schema `digest`.
+- Collection com múltiplos grupos -> corpus agregado com origem e status por item.
 
 ### Carga (Fase 2)
 
@@ -178,6 +274,7 @@ Objetivo: provar o fluxo ponta-a-ponta com um grupo real.
 
 - Docker Compose subindo serviço + Postgres (compartilhado com Evolution mock) + Redis se BullMQ for escolhido.
 - `digestctl doctor` (Fase 3) validando conectividade com Evolution, DB, Redis/fila e provider de transcrição.
+- `digestctl import-whatsapp-zip` validando ingestão de export oficial com mídia.
 
 ### Smoke
 
@@ -187,7 +284,8 @@ Objetivo: provar o fluxo ponta-a-ponta com um grupo real.
 
 - Não alterar core da Evolution API.
 - V1 prioriza mídia nova armazenada/entregue via webhook ou storage.
-- Mídia antiga só será recuperada se a Evolution expuser endpoint público funcional ou se já existir em storage.
+- Mídia antiga via Evolution/Baileys é best-effort: só será recuperada se a Evolution expuser endpoint público funcional, se já existir em storage, ou se o WhatsApp ainda disponibilizar os bytes ao dispositivo vinculado.
+- Mídia antiga com maior garantia deve entrar por importação do ZIP oficial do WhatsApp, quando o usuário conseguir exportar o chat com mídia no celular.
 - Soniox será o provider inicial de transcrição usando: https://soniox.com/docs/sdk/node-SDK.
 - Vídeo é tratado **apenas como áudio**: extrai-se a trilha sonora com `ffmpeg` e transcreve-se. Análise visual de frames está fora de escopo.
 - Postgres da Evolution é reutilizado (schema `digest`) para reduzir atrito operacional.
@@ -200,8 +298,10 @@ Objetivo: provar o fluxo ponta-a-ponta com um grupo real.
 - A separação entre serviço público e skill privada está correta. Ela evita vazar prompts, tom editorial, preferências pessoais e regras específicas dos grupos.
 - Reutilizar o Postgres da Evolution reduz bastante atrito de instalação. Para usuários Evolution, é melhor pedir um schema extra do que outro banco.
 - Tirar síntese do serviço melhora o produto open source: o serviço vira infraestrutura factual, e cada agente decide como resumir.
-- Cortar frames de vídeo no v1/Fase 2 é uma boa decisão. O custo e a complexidade de visão em vídeo não estão no caminho crítico; áudio de vídeo entrega a maior parte do valor.
+- Cortar frames de vídeo no v1/Fase 3 é uma boa decisão. O custo e a complexidade de visão em vídeo não estão no caminho crítico; áudio de vídeo entrega a maior parte do valor.
 - `pg-boss` é preferível a BullMQ no MVP se o objetivo é instalação simples. Redis só deve entrar se a fila em Postgres virar gargalo real.
+- Collections tornam explícito o caso de uso real: transformar vários grupos temáticos em um corpus bruto para OpenClaw ou outro agente.
+- Importar ZIP oficial é o caminho mais honesto para histórico com mídia: não promete o que WhatsApp Web/Multi-device não garante, mas aproveita o export oficial quando disponível.
 
 ### Riscos e ajustes necessários
 
@@ -213,6 +313,9 @@ Objetivo: provar o fluxo ponta-a-ponta com um grupo real.
 - A política eager é boa para UX, mas deve ter filtros mínimos: tamanho máximo de mídia, tipos MIME permitidos, duração máxima por arquivo e concorrência baixa por padrão.
 - Se o webhook responder antes da fila persistir, há risco de perda. A ordem correta é: validar -> persistir mensagem/job no Postgres -> responder 2xx.
 - A skill OpenClaw privada precisa ser tratada como outro projeto/config, não embutida neste repo. Este repo pode conter apenas um exemplo genérico, sem templates privados.
+- O endpoint de corpus pode gerar payloads grandes. Precisa suportar paginação/cursor, formatos streaming (`jsonl`) e limites por janela.
+- Importar ZIP oficial traz risco de duplicação com mensagens já capturadas por Evolution. O importador precisa deduplicar por heurística quando não houver `messageId` original: timestamp + sender + texto + nome de mídia.
+- Export oficial do WhatsApp tem limites próprios por plataforma/tamanho. A documentação deve posicionar ZIP import como "mais confiável para acervo local", não como garantia absoluta de todo o histórico.
 
 ### Divergências do protótipo atual que precisam ser corrigidas
 
@@ -221,6 +324,8 @@ Objetivo: provar o fluxo ponta-a-ponta com um grupo real.
 - O protótipo atual já inclui CLI, release-please e listagem de grupos; pelo plano, isso é Fase 3. Pode permanecer no repo como antecipação, mas não deve bloquear o MVP.
 - O protótipo atual inclui interpretação visual e frame de vídeo; o plano corta frame de vídeo e empurra imagem para Fase 2.
 - O protótipo atual processa mídia dentro da requisição do webhook; o plano correto é persistir/enfileirar e processar em worker.
+- O protótipo atual não tem collections/corpus multi-grupo.
+- O protótipo atual não tem backfill do Postgres da Evolution nem importador de ZIP oficial do WhatsApp.
 
 ### Recomendação de próximo passo
 
@@ -230,4 +335,7 @@ Refatorar o protótipo para o contrato da Fase 1:
 2. Introduzir fila `pg-boss` e worker de transcrição.
 3. Remover síntese do `buildDigest`; retornar timeline estruturada com status.
 4. Remover análise de frames de vídeo; vídeo vira extração de áudio.
-5. Manter Docker/CI já criados, mas ajustar docs para deixar claro o escopo Fase 1.
+5. Adicionar collections e export de corpus multi-grupo.
+6. Adicionar backfill best-effort a partir do Postgres da Evolution.
+7. Adicionar importador de ZIP oficial do WhatsApp para acervo histórico com mídia.
+8. Manter Docker/CI já criados, mas ajustar docs para deixar claro o escopo Fase 1.
