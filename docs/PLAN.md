@@ -13,6 +13,44 @@ O produto principal não é apenas "resumo de um grupo". A unidade básica é um
 
 A Evolution continua como backbone de backup/contexto. Baileys direto não será usado no v1; só entraria futuramente como adaptador avançado se uma versão pública da Evolution não expuser mídia antiga.
 
+## Estado atual do repositório
+
+O repositório contém um **protótipo scaffoldado**, não a Fase 1 final.
+
+Já existe:
+
+- serviço HTTP básico com `POST /v1/evolution/webhook/:instance`;
+- parser inicial de webhook Evolution;
+- store local JSON para desenvolvimento;
+- resolver de mídia por `webhookBase64`, `mediaUrl` e endpoints públicos `getBase64` quando existirem;
+- facade de transcrição com provider Soniox inicial;
+- CLI `wa-digest`/`digestctl` com `init`, `doctor`, `update` e stubs explícitos para `migrate`/`import-whatsapp-zip`;
+- Dockerfile, exemplo de Docker Compose, GitHub Actions, Release Please, Sentrux, AGENTS e ADR harness;
+- testes básicos para parser, digest determinístico e ingestão webhook.
+
+Ainda não existe:
+
+- Postgres no schema `digest`;
+- migrações idempotentes;
+- fila/worker `pg-boss`;
+- transcrição assíncrona fora do webhook;
+- corpus multi-grupo/collections;
+- backfill do Postgres da Evolution;
+- importador real do ZIP oficial do WhatsApp;
+- export `jsonl|markdown|text`;
+- remoção completa da síntese determinística do protótipo.
+
+## Por onde começar
+
+O próximo trabalho deve transformar o scaffold no contrato real da Fase 1:
+
+1. **Persistência Postgres**: substituir `JsonStore` por `digest.messages`, `digest.media` e `digest.transcriptions`.
+2. **Migrações**: adicionar runner idempotente para criar apenas objetos no schema `digest`; ligar ao comando `wa-digest migrate`.
+3. **Fila/worker**: adicionar `pg-boss`; webhook deve validar, persistir mensagem/job e responder 2xx rapidamente.
+4. **Worker de transcrição**: mover resolução/transcrição de mídia para worker com retry/backoff e status explícito.
+5. **Contrato do endpoint**: ajustar `GET /v1/groups/:jid/digest` para retornar timeline/transcrições/status, sem síntese final.
+6. **Testes de Fase 1**: cobrir webhook duplicado, provider em falha, job processado e status parcial.
+
 ## Cadência de desenvolvimento
 
 Em vez de tentar entregar toda a API surface de uma vez, dividir em três fases.

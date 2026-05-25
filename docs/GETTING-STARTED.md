@@ -1,5 +1,16 @@
 # Getting Started
 
+## Current Status
+
+WA Digest is currently a scaffold/prototype. It is useful for validating the HTTP shape, webhook parsing, provider facades, packaging, and docs harness. The production Fase 1 work starts by replacing the local JSON store with Postgres schema `digest` and moving media processing into a `pg-boss` worker.
+
+Start with:
+
+1. Read [PLAN.md](PLAN.md), especially "Estado atual do repositório" and "Por onde começar".
+2. Read [AGENTS.md](../AGENTS.md).
+3. Run the local checks.
+4. Implement the Fase 1 persistence/worker path.
+
 ## Prerequisites
 
 - Node.js 20+
