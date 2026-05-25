@@ -21,6 +21,7 @@ export interface AppConfig {
   transcriptionAllowedMimeTypes: string[];
   maxTranscriptionMinutesPerDay: number;
   openclawCompat: boolean;
+  monitorWebhookUrl: string;
 }
 
 function bool(value: string | undefined, fallback: boolean): boolean {
@@ -68,6 +69,7 @@ export function loadConfig(env = process.env): AppConfig {
     mediaDownloadTimeoutMs: positiveInteger(env.MEDIA_DOWNLOAD_TIMEOUT_MS, 30_000),
     transcriptionAllowedMimeTypes: csv(env.TRANSCRIPTION_ALLOWED_MIME_TYPES, ["audio/*", "video/*"]),
     maxTranscriptionMinutesPerDay: nonNegativeNumber(env.MAX_TRANSCRIPTION_MINUTES_PER_DAY, 0),
-    openclawCompat: bool(env.OPENCLAW_COMPAT, true)
+    openclawCompat: bool(env.OPENCLAW_COMPAT, true),
+    monitorWebhookUrl: env.MONITOR_WEBHOOK_URL || ""
   };
 }

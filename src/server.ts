@@ -52,6 +52,15 @@ export function createApp(deps: AppDeps = {}) {
         jobId = await queue.enqueueTranscription(message);
       }
 
+      if (config.monitorWebhookUrl) {
+        const monitorAuth = `Bearer ${config.apiToken}`;
+        fetch(config.monitorWebhookUrl, {
+          method: "POST",
+          headers: { "content-type": "application/json", authorization: monitorAuth },
+          body: JSON.stringify(req.body)
+        }).catch(() => undefined);
+      }
+
       return res.json({
         ok: true,
         queued: Boolean(jobId),

@@ -42,7 +42,7 @@ export class PgBossTranscriptionQueue implements TranscriptionQueue {
         retryDelay: TRANSCRIPTION_RETRY_DELAY_SECONDS,
         retryBackoff: TRANSCRIPTION_RETRY_BACKOFF,
         singletonKey: `${message.instance}:${message.id}`,
-        singletonSeconds: 60 * 60 * 24 * 7
+        singletonSeconds: 3600
       }
     );
   }
