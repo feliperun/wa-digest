@@ -1,6 +1,6 @@
 {
   "name": "wa-digest",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Companion digest service for Evolution API webhooks and agent-ready WhatsApp timelines.",
   "type": "module",
   "homepage": "https://github.com/feliperun/wa-digest#readme",
