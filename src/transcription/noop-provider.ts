@@ -1,5 +1,5 @@
 import type { TranscribeInput, TranscribeOutput } from "../types.js";
-import type { TranscriberProvider } from "./controller.js";
+import type { TranscriberProvider } from "./provider.js";
 
 export class NoopTranscriberProvider implements TranscriberProvider {
   readonly name = "noop";

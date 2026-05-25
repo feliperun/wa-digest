@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { AppConfig } from "../config.js";
 import type { TranscribeInput, TranscribeOutput } from "../types.js";
-import type { TranscriberProvider } from "./controller.js";
+import type { TranscriberProvider } from "./provider.js";
 
 export class SonioxTranscriberProvider implements TranscriberProvider {
   readonly name = "soniox";

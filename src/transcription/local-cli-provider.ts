@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import type { TranscribeInput, TranscribeOutput } from "../types.js";
-import type { TranscriberProvider } from "./controller.js";
+import type { TranscriberProvider } from "./provider.js";
 
 export class LocalCliTranscriberProvider implements TranscriberProvider {
   readonly name = "local-cli";

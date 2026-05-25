@@ -19,6 +19,10 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      - name: Install Sentrux
+        run: curl -fsSL https://raw.githubusercontent.com/sentrux/sentrux/main/install.sh | sh
+      - name: Architecture check
+        run: sentrux check .
 
   docker:
     runs-on: ubuntu-latest

@@ -3,12 +3,8 @@ import type { TranscribeInput, TranscribeOutput } from "../types.js";
 import { LocalCliTranscriberProvider } from "./local-cli-provider.js";
 import { NoopTranscriberProvider } from "./noop-provider.js";
 import { OpenAiCompatibleTranscriberProvider } from "./openai-compatible-provider.js";
+import type { TranscriberProvider } from "./provider.js";
 import { SonioxTranscriberProvider } from "./soniox-provider.js";
-
-export interface TranscriberProvider {
-  readonly name: string;
-  transcribe(input: TranscribeInput): Promise<TranscribeOutput>;
-}
 
 export class TranscriberController {
   private readonly provider: TranscriberProvider;

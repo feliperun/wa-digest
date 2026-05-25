@@ -14,6 +14,14 @@ It is designed for OpenClaw/Ford, but the HTTP API is generic and can be consume
 - Transcribes audio through a provider facade. The initial provider is Soniox via the official Node SDK.
 - Interprets images/video frames through a vision provider facade, with a metadata fallback.
 
+Project docs:
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Vision](docs/VISION.md)
+- [Plan](docs/PLAN.md)
+- [ADRs](docs/adr/README.md)
+- [Agent instructions](AGENTS.md)
+
 ## Quick Start
 
 ```bash
