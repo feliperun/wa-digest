@@ -1,0 +1,33 @@
+services:
+  evolution-media-digest:
+    image: ghcr.io/feliperun/evolution-media-digest:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3897:3897"
+    environment:
+      PORT: "3897"
+      DIGEST_API_TOKEN: "${DIGEST_API_TOKEN}"
+      EVOLUTION_BASE_URL: "${EVOLUTION_BASE_URL:-http://evolution-api:8080}"
+      EVOLUTION_API_KEY: "${EVOLUTION_API_KEY}"
+      EVOLUTION_INSTANCE: "${EVOLUTION_INSTANCE:-monitor}"
+      MEDIA_STORAGE_DIR: "/data"
+      TRANSCRIBER_PROVIDER: "${TRANSCRIBER_PROVIDER:-soniox}"
+      SONIOX_API_KEY: "${SONIOX_API_KEY}"
+      SONIOX_MODEL: "${SONIOX_MODEL:-stt-async-v4}"
+      VISION_PROVIDER: "${VISION_PROVIDER:-metadata}"
+      VISION_BASE_URL: "${VISION_BASE_URL:-}"
+      VISION_API_KEY: "${VISION_API_KEY:-}"
+      VISION_MODEL: "${VISION_MODEL:-gpt-4.1-mini}"
+      OPENCLAW_COMPAT: "true"
+    volumes:
+      - evolution_media_digest_data:/data
+
+  watchtower:
+    image: containrrr/watchtower
+    restart: unless-stopped
+    command: --interval 3600 --cleanup evolution-media-digest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  evolution_media_digest_data:
