@@ -12,6 +12,7 @@
     "url": "https://github.com/feliperun/wa-digest/issues"
   },
   "bin": {
+    "wa-digest": "./dist/cli.js",
     "digestctl": "./dist/cli.js"
   },
   "scripts": {
@@ -49,6 +50,14 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    ".env.example",
+    "examples",
+    "docs/adr",
+    "docs/ARCHITECTURE.md",
+    "docs/GETTING-STARTED.md",
+    "docs/PLAN.md",
+    "docs/VISION.md",
+    "openclaw/skills"
   ]
 }

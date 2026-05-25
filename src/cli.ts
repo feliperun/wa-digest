@@ -1,6 +1,88 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import { loadConfig } from "./config.js";
+
+const ENV_TEMPLATE = `PORT=3897
+DIGEST_API_TOKEN=change-me
+
+EVOLUTION_BASE_URL=http://127.0.0.1:8080
+EVOLUTION_API_KEY=change-me
+EVOLUTION_INSTANCE=monitor
+
+DATABASE_URL=postgresql://evo:change-me@127.0.0.1:5432/evolution
+MEDIA_STORAGE_DIR=./data
+
+TRANSCRIBER_PROVIDER=soniox
+SONIOX_API_KEY=
+SONIOX_MODEL=stt-async-v4
+
+VISION_PROVIDER=metadata
+OPENCLAW_COMPAT=true
+`;
+
+const COMPOSE_TEMPLATE = `services:
+  wa-digest:
+    image: ghcr.io/feliperun/wa-digest:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3897:3897"
+    env_file:
+      - .env
+    volumes:
+      - wa_digest_data:/data
+
+volumes:
+  wa_digest_data:
+`;
+
+const COLLECTIONS_TEMPLATE = `{
+  "collections": {
+    "tech": {
+      "description": "Technology groups corpus",
+      "chats": [
+        "120363000000000000@g.us"
+      ]
+    }
+  }
+}
+`;
+
+function writeNew(filePath: string, content: string, force: boolean) {
+  if (fs.existsSync(filePath) && !force) {
+    return { filePath, status: "exists" };
+  }
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, content, "utf8");
+  return { filePath, status: fs.existsSync(filePath) ? "written" : "created" };
+}
+
+function hasFlag(name: string) {
+  return process.argv.includes(name);
+}
+
+async function init() {
+  const force = hasFlag("--force");
+  const target = process.cwd();
+  const files = [
+    writeNew(path.join(target, ".env"), ENV_TEMPLATE, force),
+    writeNew(path.join(target, "docker-compose.wa-digest.yml"), COMPOSE_TEMPLATE, force),
+    writeNew(path.join(target, "collections.example.json"), COLLECTIONS_TEMPLATE, force)
+  ];
+  for (const file of files) {
+    // eslint-disable-next-line no-console
+    console.log(`${file.status} ${path.relative(target, file.filePath)}`);
+  }
+  // eslint-disable-next-line no-console
+  console.log(`
+Next steps:
+  1. Edit .env with EVOLUTION_API_KEY, DATABASE_URL, DIGEST_API_TOKEN, and SONIOX_API_KEY.
+  2. Configure Evolution webhook to POST /v1/evolution/webhook/<instance>.
+  3. Start with: docker compose -f docker-compose.wa-digest.yml up -d
+  4. Check with: npx wa-digest doctor
+`);
+}
 
 async function doctor() {
   const config = loadConfig();
@@ -24,6 +106,41 @@ async function doctor() {
   process.exitCode = ok ? 0 : 1;
 }
 
+async function migrate() {
+  // eslint-disable-next-line no-console
+  console.log(`Migration command is planned but not implemented in the prototype.
+
+Target behavior:
+  - connect to DATABASE_URL
+  - create schema digest
+  - apply idempotent migrations only under digest.*
+
+For now, track the production migration design in docs/PLAN.md and ADR-0002.`);
+  process.exitCode = 2;
+}
+
+async function importWhatsappZip() {
+  const zipPath = process.argv[3] || "";
+  if (!zipPath) {
+    // eslint-disable-next-line no-console
+    console.error("Usage: wa-digest import-whatsapp-zip <archive.zip> --chat <jid-or-name> --instance <instance>");
+    process.exitCode = 2;
+    return;
+  }
+  // eslint-disable-next-line no-console
+  console.log(`WhatsApp ZIP import is planned but not implemented in the prototype.
+
+Requested archive: ${zipPath}
+
+Target behavior:
+  - parse _chat.txt
+  - index attached media files
+  - transcribe audio/video
+  - deduplicate against Evolution-ingested messages
+  - persist imported corpus with origin=whatsapp_zip_import`);
+  process.exitCode = 2;
+}
+
 async function update() {
   const packageName = process.env.DIGEST_UPDATE_PACKAGE || "wa-digest";
   const manager = process.env.DIGEST_UPDATE_MANAGER || "npm";
@@ -34,12 +151,23 @@ async function update() {
 
 async function main() {
   const command = process.argv[2] || "help";
+  if (command === "init") return init();
   if (command === "doctor") return doctor();
+  if (command === "migrate") return migrate();
+  if (command === "import-whatsapp-zip") return importWhatsappZip();
   if (command === "update") return update();
   // eslint-disable-next-line no-console
   console.log(`Usage:
-  digestctl doctor
-  digestctl update
+  wa-digest init [--force]
+  wa-digest doctor
+  wa-digest migrate
+  wa-digest import-whatsapp-zip <archive.zip> --chat <jid-or-name> --instance <instance>
+  wa-digest update
+
+npx examples:
+  npx wa-digest@latest init
+  npx wa-digest@latest doctor
+  npx wa-digest@latest import-whatsapp-zip ./chat.zip --chat "CTO Real" --instance monitor
 
 Environment:
   DIGEST_API_TOKEN, EVOLUTION_BASE_URL, EVOLUTION_API_KEY, MEDIA_STORAGE_DIR

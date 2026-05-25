@@ -35,4 +35,4 @@ flowchart LR
 
 ## Active Decisions
 
-See [docs/adr/README.md](adr/README.md). The current architecture is governed by ADR-0001 through ADR-0006.
+See [docs/adr/README.md](adr/README.md). The current architecture is governed by ADR-0001 through ADR-0007.

@@ -24,6 +24,20 @@ Project docs:
 
 ## Quick Start
 
+Bootstrap a local config with `npx`:
+
+```bash
+npx wa-digest@latest init
+```
+
+Then edit `.env` and run with Docker:
+
+```bash
+docker compose -f docker-compose.wa-digest.yml up -d
+```
+
+For local development from a clone:
+
 ```bash
 cp .env.example .env
 npm install
@@ -40,8 +54,10 @@ curl http://127.0.0.1:3897/healthz
 Doctor:
 
 ```bash
-npx digestctl doctor
+npx wa-digest@latest doctor
 ```
+
+`npx` is intended for setup, diagnostics, migrations, and one-shot imports. Use Docker, a pinned package install, or a global install for a long-running service/worker.
 
 ## Evolution Webhook
 

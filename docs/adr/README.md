@@ -35,3 +35,4 @@ superseded_by: "NNNN"  # only if status: superseded
 | [0004](0004-historical-media-best-effort-and-zip-import.md) | Historical media is best-effort; ZIP import is the reliable archive path | active |
 | [0005](0005-transcription-provider-facade.md) | Transcription provider facade with Soniox first | active |
 | [0006](0006-postgres-backed-worker-queue.md) | Postgres-backed worker queue before Redis | active |
+| [0007](0007-npx-for-onboarding-not-runtime.md) | npx for onboarding, not runtime | active |
