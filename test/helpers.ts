@@ -20,6 +20,10 @@ export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     visionProvider: "metadata",
     visionModel: "vision-test",
     maxConcurrentTranscriptions: 1,
+    maxTranscriptionMediaBytes: 25 * 1024 * 1024,
+    mediaDownloadTimeoutMs: 30_000,
+    transcriptionAllowedMimeTypes: ["audio/*", "video/*"],
+    maxTranscriptionMinutesPerDay: 0,
     openclawCompat: true,
     ...overrides
   };

@@ -280,11 +280,12 @@ export class PgStore {
     transcript: string;
     segments?: unknown;
     raw?: unknown;
+    durationSeconds?: number;
   }): Promise<void> {
     await this.db.query(
       `
-      INSERT INTO digest.transcriptions (instance, message_id, status, provider, model, transcript, segments, raw, error)
-      VALUES ($1, $2, 'transcribed', $3, $4, $5, $6::jsonb, $7::jsonb, NULL)
+      INSERT INTO digest.transcriptions (instance, message_id, status, provider, model, transcript, segments, raw, duration_seconds, error)
+      VALUES ($1, $2, 'transcribed', $3, $4, $5, $6::jsonb, $7::jsonb, $8, NULL)
       ON CONFLICT (instance, message_id) DO UPDATE
       SET status = 'transcribed',
           provider = EXCLUDED.provider,
@@ -292,6 +293,7 @@ export class PgStore {
           transcript = EXCLUDED.transcript,
           segments = EXCLUDED.segments,
           raw = EXCLUDED.raw,
+          duration_seconds = EXCLUDED.duration_seconds,
           error = NULL,
           updated_at = now()
       `,
@@ -302,9 +304,27 @@ export class PgStore {
         input.model || null,
         input.transcript,
         JSON.stringify(input.segments || null),
-        JSON.stringify(input.raw || null)
+        JSON.stringify(input.raw || null),
+        input.durationSeconds ?? null
       ]
     );
+  }
+
+  async getTranscriptionUsageSeconds(instance: string, since: Date, excludeMessageId?: string): Promise<number> {
+    const result = await this.db.query<{ seconds: string | number | null }>(
+      `
+      SELECT COALESCE(SUM(COALESCE(t.duration_seconds, 60)), 0) AS seconds
+      FROM digest.transcriptions t
+      INNER JOIN digest.messages m
+        ON m.instance = t.instance AND m.message_id = t.message_id
+      WHERE t.instance = $1
+        AND m.received_at >= $2
+        AND t.status IN ('processing', 'transcribed')
+        AND ($3::text IS NULL OR t.message_id <> $3)
+      `,
+      [instance, since, excludeMessageId || null]
+    );
+    return Number(result.rows[0]?.seconds || 0);
   }
 
   private async upsertMediaFromMessage(message: Omit<StoredMessage, "receivedAt">, status: MediaStatus): Promise<void> {

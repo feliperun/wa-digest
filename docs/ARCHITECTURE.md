@@ -9,6 +9,7 @@ WA Digest is a companion service for Evolution API. It captures WhatsApp webhook
 3. **Postgres is the durable boundary.** Evolution owns its schemas; WA Digest owns only schema `digest`.
 4. **Media processing is asynchronous.** Webhooks must persist and enqueue work quickly; workers handle audio/video transcription.
 5. **Historical media is honest.** Future media can be captured reliably with storage/webhook configuration. Historical media through linked-device APIs is best-effort. ZIP import is the practical archive path.
+6. **Transcription is bounded.** Workers enforce media size, MIME, timeout, and daily-budget limits before provider calls, and the corpus API reports partial reasons explicitly.
 
 ## Runtime Shape
 
@@ -35,4 +36,4 @@ flowchart LR
 
 ## Active Decisions
 
-See [docs/adr/README.md](adr/README.md). The current architecture is governed by ADR-0001 through ADR-0007.
+See [docs/adr/README.md](adr/README.md). The current architecture is governed by ADR-0001 through ADR-0008.

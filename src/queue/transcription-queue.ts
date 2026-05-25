@@ -3,6 +3,9 @@ import type { AppConfig } from "../config.js";
 import type { NormalizedMessage } from "../types.js";
 
 export const TRANSCRIPTION_QUEUE = "transcription";
+export const TRANSCRIPTION_RETRY_LIMIT = 3;
+export const TRANSCRIPTION_RETRY_DELAY_SECONDS = 5;
+export const TRANSCRIPTION_RETRY_BACKOFF = true;
 
 export interface TranscriptionJobData {
   instance: string;
@@ -35,9 +38,9 @@ export class PgBossTranscriptionQueue implements TranscriptionQueue {
       TRANSCRIPTION_QUEUE,
       { instance: message.instance, messageId: message.id },
       {
-        retryLimit: 3,
-        retryDelay: 5,
-        retryBackoff: true,
+        retryLimit: TRANSCRIPTION_RETRY_LIMIT,
+        retryDelay: TRANSCRIPTION_RETRY_DELAY_SECONDS,
+        retryBackoff: TRANSCRIPTION_RETRY_BACKOFF,
         singletonKey: `${message.instance}:${message.id}`,
         singletonSeconds: 60 * 60 * 24 * 7
       }

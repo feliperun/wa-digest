@@ -14,7 +14,8 @@ export function buildCorpusDigest(chatJid: string, hours: number, messages: Mess
     transcribed: 0,
     metadataOnly: 0,
     unavailable: 0,
-    failed: 0
+    failed: 0,
+    rejected: 0
   };
 
   for (const message of messages) {
@@ -24,7 +25,17 @@ export function buildCorpusDigest(chatJid: string, hours: number, messages: Mess
     if (status === "metadata_only") counts.metadataOnly += 1;
     if (status === "unavailable") counts.unavailable += 1;
     if (status === "failed") counts.failed += 1;
+    if (status === "rejected") counts.rejected += 1;
   }
+
+  const reason =
+    counts.processing > 0
+      ? "processing"
+      : counts.failed > 0
+        ? "failed_items"
+        : counts.unavailable > 0 || counts.rejected > 0
+          ? "partial_media_unavailable"
+          : undefined;
 
   return {
     ok: true,
@@ -34,7 +45,8 @@ export function buildCorpusDigest(chatJid: string, hours: number, messages: Mess
     mediaCount: messages.filter((message) => message.mediaKind !== "text").length,
     generatedAt: new Date().toISOString(),
     status: {
-      state: counts.processing > 0 ? "partial" : "complete",
+      state: reason ? "partial" : "complete",
+      reason,
       ...counts
     },
     timeline: messages.map((message) => {

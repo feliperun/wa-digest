@@ -99,7 +99,7 @@ All `/v1/*` endpoints require:
 Authorization: Bearer <DIGEST_API_TOKEN>
 ```
 
-`GET /v1/groups/:jid/digest` returns a structured corpus package with `timeline`, per-item media/transcription status, and aggregate `status.state` (`complete` or `partial`). It intentionally omits final summary fields; downstream agents own synthesis.
+`GET /v1/groups/:jid/digest` returns a structured corpus package with `timeline`, per-item media/transcription status, and aggregate `status.state` (`complete` or `partial`). Partial responses include `status.reason` (`processing`, `failed_items`, or `partial_media_unavailable`). It intentionally omits final summary fields; downstream agents own synthesis.
 
 ## Transcription Providers
 
@@ -115,6 +115,17 @@ The provider facade also reserves `openai-compatible`, `mistral`, `voxtral`, `lo
 
 Soniox SDK reference: https://soniox.com/docs/sdk/node-SDK
 
+Operational guards:
+
+```text
+MAX_TRANSCRIPTION_MEDIA_BYTES=26214400
+MEDIA_DOWNLOAD_TIMEOUT_MS=30000
+TRANSCRIPTION_ALLOWED_MIME_TYPES=audio/*,video/*
+MAX_TRANSCRIPTION_MINUTES_PER_DAY=0
+```
+
+`MAX_TRANSCRIPTION_MINUTES_PER_DAY=0` disables the daily cap. When a worker refuses an item because of size, MIME, or budget policy, the item remains in the corpus with status `rejected` and an explicit error reason.
+
 ## Docker
 
 ```bash
@@ -127,7 +138,13 @@ Before first start or after upgrades, run the idempotent migration:
 docker compose -f examples/docker-compose.yml --env-file .env run --rm wa-digest node dist/cli.js migrate
 ```
 
-The example starts the HTTP service and a separate worker, and includes Watchtower for auto-updates when using the GHCR image.
+Or use the one-shot migration service:
+
+```bash
+docker compose -f examples/docker-compose.yml --env-file .env run --rm wa-digest-migrate
+```
+
+The example starts the HTTP service and a separate worker (`node dist/cli.js worker`), uses the same `wa_digest_data` volume for `MEDIA_STORAGE_DIR=/data`, and includes Watchtower for auto-updates when using the GHCR image.
 
 ## OpenClaw
 

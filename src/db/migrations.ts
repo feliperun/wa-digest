@@ -1,7 +1,12 @@
 import PgBoss from "pg-boss";
 import { createPgPool, type Queryable } from "./pool.js";
 import type { AppConfig } from "../config.js";
-import { TRANSCRIPTION_QUEUE } from "../queue/transcription-queue.js";
+import {
+  TRANSCRIPTION_QUEUE,
+  TRANSCRIPTION_RETRY_BACKOFF,
+  TRANSCRIPTION_RETRY_DELAY_SECONDS,
+  TRANSCRIPTION_RETRY_LIMIT
+} from "../queue/transcription-queue.js";
 
 export const DIGEST_MIGRATION_SQL = `
 CREATE SCHEMA IF NOT EXISTS digest;
@@ -92,9 +97,9 @@ export async function migrateDatabase(config: AppConfig): Promise<void> {
     await boss.start();
     await boss.createQueue(TRANSCRIPTION_QUEUE, {
       name: TRANSCRIPTION_QUEUE,
-      retryLimit: 3,
-      retryDelay: 5,
-      retryBackoff: true
+      retryLimit: TRANSCRIPTION_RETRY_LIMIT,
+      retryDelay: TRANSCRIPTION_RETRY_DELAY_SECONDS,
+      retryBackoff: TRANSCRIPTION_RETRY_BACKOFF
     });
     await boss.stop({ graceful: true, close: true });
   } finally {

@@ -1,6 +1,7 @@
 import PgBoss from "pg-boss";
 import type { AppConfig } from "../config.js";
 import { createPgPool } from "../db/pool.js";
+import { logger } from "../logger.js";
 import { PgStore } from "../store/pg-store.js";
 import { TRANSCRIPTION_QUEUE, type TranscriptionJobData } from "../queue/transcription-queue.js";
 import { TranscriptionWorker } from "./transcription-worker.js";
@@ -20,8 +21,12 @@ export async function startTranscriptionWorker(config: AppConfig): Promise<Runni
     supervise: true,
     schedule: false
   });
-  boss.on("error", () => undefined);
+  boss.on("error", (error) => logger.error("pgboss_error", { error: String((error as Error)?.message || error) }));
   await boss.start();
+  logger.info("transcription_worker_started", {
+    queue: TRANSCRIPTION_QUEUE,
+    maxConcurrentTranscriptions: config.maxConcurrentTranscriptions
+  });
   await boss.work<TranscriptionJobData>(
     TRANSCRIPTION_QUEUE,
     {

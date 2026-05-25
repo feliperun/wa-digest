@@ -34,6 +34,14 @@ Run the worker in another shell when testing transcription:
 npm run worker
 ```
 
+Optional real-Postgres integration checks are disabled by default. To run them, point `DATABASE_URL_TEST` at a disposable development database:
+
+```bash
+DATABASE_URL_TEST=postgresql://user:pass@127.0.0.1:5432/wa_digest_test npm test
+```
+
+The worker enforces media size, MIME allowlist, download timeout, and optional daily transcription budget through `.env` values from [.env.example](../.env.example).
+
 Healthcheck:
 
 ```bash

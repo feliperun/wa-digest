@@ -16,6 +16,10 @@ export interface AppConfig {
   visionApiKey?: string;
   visionModel: string;
   maxConcurrentTranscriptions: number;
+  maxTranscriptionMediaBytes: number;
+  mediaDownloadTimeoutMs: number;
+  transcriptionAllowedMimeTypes: string[];
+  maxTranscriptionMinutesPerDay: number;
   openclawCompat: boolean;
 }
 
@@ -24,9 +28,26 @@ function bool(value: string | undefined, fallback: boolean): boolean {
   return /^(1|true|yes|on)$/i.test(value);
 }
 
+function positiveInteger(value: string | undefined, fallback: number): number {
+  const parsed = Number(value || fallback);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : fallback;
+}
+
+function nonNegativeNumber(value: string | undefined, fallback: number): number {
+  const parsed = Number(value || fallback);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function csv(value: string | undefined, fallback: string[]): string[] {
+  const parsed = String(value || "")
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+  return parsed.length > 0 ? parsed : fallback;
+}
+
 export function loadConfig(env = process.env): AppConfig {
   const mediaStorageDir = path.resolve(env.MEDIA_STORAGE_DIR || "./data");
-  const maxConcurrentTranscriptions = Number(env.MAX_CONCURRENT_TRANSCRIPTIONS || 2);
   return {
     port: Number(env.PORT || 3897),
     apiToken: env.DIGEST_API_TOKEN || "",
@@ -42,10 +63,11 @@ export function loadConfig(env = process.env): AppConfig {
     visionBaseUrl: env.VISION_BASE_URL || env.OPENAI_BASE_URL || undefined,
     visionApiKey: env.VISION_API_KEY || env.OPENAI_API_KEY || undefined,
     visionModel: env.VISION_MODEL || "gpt-4.1-mini",
-    maxConcurrentTranscriptions:
-      Number.isFinite(maxConcurrentTranscriptions) && maxConcurrentTranscriptions > 0
-        ? Math.trunc(maxConcurrentTranscriptions)
-        : 2,
+    maxConcurrentTranscriptions: positiveInteger(env.MAX_CONCURRENT_TRANSCRIPTIONS, 2),
+    maxTranscriptionMediaBytes: positiveInteger(env.MAX_TRANSCRIPTION_MEDIA_BYTES, 25 * 1024 * 1024),
+    mediaDownloadTimeoutMs: positiveInteger(env.MEDIA_DOWNLOAD_TIMEOUT_MS, 30_000),
+    transcriptionAllowedMimeTypes: csv(env.TRANSCRIPTION_ALLOWED_MIME_TYPES, ["audio/*", "video/*"]),
+    maxTranscriptionMinutesPerDay: nonNegativeNumber(env.MAX_TRANSCRIPTION_MINUTES_PER_DAY, 0),
     openclawCompat: bool(env.OPENCLAW_COMPAT, true)
   };
 }

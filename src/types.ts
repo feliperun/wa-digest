@@ -1,6 +1,6 @@
 export type MediaKind = "text" | "audio" | "image" | "video" | "document" | "unknown";
 
-export type MediaStatus = "none" | "processing" | "transcribed" | "metadata_only" | "unavailable" | "failed";
+export type MediaStatus = "none" | "processing" | "transcribed" | "metadata_only" | "unavailable" | "failed" | "rejected";
 
 export interface NormalizedMessage {
   id: string;
@@ -57,11 +57,13 @@ export interface DigestResponse {
   generatedAt: string;
   status: {
     state: "complete" | "partial";
+    reason?: "processing" | "failed_items" | "partial_media_unavailable";
     processing: number;
     transcribed: number;
     metadataOnly: number;
     unavailable: number;
     failed: number;
+    rejected: number;
   };
   timeline: Array<{
     id: string;
@@ -110,6 +112,7 @@ export interface TranscribeOutput {
   }>;
   provider: string;
   model?: string;
+  durationSeconds?: number;
   raw?: unknown;
 }
 

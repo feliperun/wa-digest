@@ -75,3 +75,63 @@ test("provider failure marks transcription as failed", async () => {
     await pool.end();
   }
 });
+
+test("worker records missing queued messages without retrying forever", async () => {
+  const config = testConfig();
+  const { store, pool } = await createMemoryStore();
+  const worker = new TranscriptionWorker(config, store, new TranscriberController(config, new StaticProvider()));
+
+  try {
+    await worker.process({ instance: "test-instance", messageId: "missing-message" });
+  } finally {
+    await pool.end();
+  }
+});
+
+test("worker rejects media over configured byte limit", async () => {
+  const config = testConfig({ maxTranscriptionMediaBytes: 4 });
+  const { store, pool } = await createMemoryStore();
+  await store.saveMessage(audioMessage("audio-too-large"));
+  const worker = new TranscriptionWorker(config, store, new TranscriberController(config, new StaticProvider()));
+
+  try {
+    await worker.process({ instance: "test-instance", messageId: "audio-too-large" });
+    const messages = await store.getMessages("100000000000000001@g.us", 0);
+    assert.equal(messages[0].analysis?.status, "rejected");
+    assert.match(messages[0].analysis?.error || "", /MAX_TRANSCRIPTION_MEDIA_BYTES/);
+  } finally {
+    await pool.end();
+  }
+});
+
+test("worker rejects disallowed transcription mimetypes", async () => {
+  const config = testConfig({ transcriptionAllowedMimeTypes: ["audio/mpeg"] });
+  const { store, pool } = await createMemoryStore();
+  await store.saveMessage(audioMessage("audio-disallowed-mime"));
+  const worker = new TranscriptionWorker(config, store, new TranscriberController(config, new StaticProvider()));
+
+  try {
+    await worker.process({ instance: "test-instance", messageId: "audio-disallowed-mime" });
+    const messages = await store.getMessages("100000000000000001@g.us", 0);
+    assert.equal(messages[0].analysis?.status, "rejected");
+    assert.match(messages[0].analysis?.error || "", /mimetype is not allowed/);
+  } finally {
+    await pool.end();
+  }
+});
+
+test("worker enforces the daily transcription budget stub", async () => {
+  const config = testConfig({ maxTranscriptionMinutesPerDay: 0.5 });
+  const { store, pool } = await createMemoryStore();
+  await store.saveMessage(audioMessage("audio-budget"));
+  const worker = new TranscriptionWorker(config, store, new TranscriberController(config, new StaticProvider()));
+
+  try {
+    await worker.process({ instance: "test-instance", messageId: "audio-budget" });
+    const messages = await store.getMessages("100000000000000001@g.us", 0);
+    assert.equal(messages[0].analysis?.status, "rejected");
+    assert.match(messages[0].analysis?.error || "", /daily transcription budget exceeded/);
+  } finally {
+    await pool.end();
+  }
+});

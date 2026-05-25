@@ -23,6 +23,10 @@ SONIOX_MODEL=stt-async-v4
 VISION_PROVIDER=metadata
 OPENCLAW_COMPAT=true
 MAX_CONCURRENT_TRANSCRIPTIONS=2
+MAX_TRANSCRIPTION_MEDIA_BYTES=26214400
+MEDIA_DOWNLOAD_TIMEOUT_MS=30000
+TRANSCRIPTION_ALLOWED_MIME_TYPES=audio/*,video/*
+MAX_TRANSCRIPTION_MINUTES_PER_DAY=0
 `;
 
 const COMPOSE_TEMPLATE = `services:
@@ -33,6 +37,30 @@ const COMPOSE_TEMPLATE = `services:
       - "127.0.0.1:3897:3897"
     env_file:
       - .env
+    environment:
+      MEDIA_STORAGE_DIR: /data
+    volumes:
+      - wa_digest_data:/data
+
+  wa-digest-worker:
+    image: ghcr.io/feliperun/wa-digest:latest
+    restart: unless-stopped
+    command: ["node", "dist/cli.js", "worker"]
+    env_file:
+      - .env
+    environment:
+      MEDIA_STORAGE_DIR: /data
+    volumes:
+      - wa_digest_data:/data
+
+  wa-digest-migrate:
+    image: ghcr.io/feliperun/wa-digest:latest
+    restart: "no"
+    command: ["node", "dist/cli.js", "migrate"]
+    env_file:
+      - .env
+    environment:
+      MEDIA_STORAGE_DIR: /data
     volumes:
       - wa_digest_data:/data
 

@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import type { AppConfig } from "../config.js";
+import { logger } from "../logger.js";
 import { resolveMedia } from "../media/resolver.js";
 import type { PgStore } from "../store/pg-store.js";
 import { TranscriberController } from "../transcription/controller.js";
@@ -33,6 +34,14 @@ async function extractVideoAudio(videoPath: string): Promise<string | undefined>
   }
 }
 
+function startOfUtcDay(date = new Date()): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+function estimateUnknownDurationSeconds(): number {
+  return 60;
+}
+
 export class TranscriptionWorker {
   constructor(
     private readonly config: AppConfig,
@@ -42,20 +51,44 @@ export class TranscriptionWorker {
 
   async process(job: TranscriptionJobData): Promise<void> {
     const message = await this.store.getMessage(job.instance, job.messageId);
-    if (!message) throw new Error(`message not found: ${job.instance}/${job.messageId}`);
+    if (!message) {
+      logger.warn("transcription_job_message_missing", { instance: job.instance, messageId: job.messageId });
+      return;
+    }
 
     if (message.mediaKind !== "audio" && message.mediaKind !== "video") {
       await this.store.markMediaStatus(job.instance, job.messageId, "metadata_only");
       return;
     }
 
+    logger.info("transcription_job_started", { instance: job.instance, messageId: job.messageId, mediaKind: message.mediaKind });
     await this.store.markMediaStatus(job.instance, job.messageId, "processing");
     await this.store.upsertTranscriptionStatus(job.instance, job.messageId, "processing");
 
+    if (this.config.maxTranscriptionMinutesPerDay > 0) {
+      const usedSeconds = await this.store.getTranscriptionUsageSeconds(job.instance, startOfUtcDay(), job.messageId);
+      const maxSeconds = this.config.maxTranscriptionMinutesPerDay * 60;
+      const estimatedSeconds = estimateUnknownDurationSeconds();
+      if (usedSeconds + estimatedSeconds > maxSeconds) {
+        const reason = `daily transcription budget exceeded (${usedSeconds + estimatedSeconds}s > ${maxSeconds}s)`;
+        await this.store.markMediaStatus(job.instance, job.messageId, "rejected", reason);
+        await this.store.upsertTranscriptionStatus(job.instance, job.messageId, "rejected", reason);
+        logger.warn("transcription_job_rejected", { instance: job.instance, messageId: job.messageId, reason });
+        return;
+      }
+    }
+
     const resolved = await resolveMedia(this.config, message);
     if (!resolved.ok) {
-      await this.store.markMediaStatus(job.instance, job.messageId, "unavailable", resolved.reason);
-      await this.store.upsertTranscriptionStatus(job.instance, job.messageId, "unavailable", resolved.reason);
+      await this.store.markMediaStatus(job.instance, job.messageId, resolved.status, resolved.reason);
+      await this.store.upsertTranscriptionStatus(job.instance, job.messageId, resolved.status, resolved.reason);
+      logger.warn("transcription_media_unresolved", {
+        instance: job.instance,
+        messageId: job.messageId,
+        status: resolved.status,
+        reason: resolved.reason
+      });
+      if (resolved.status === "failed") throw new Error(resolved.reason);
       return;
     }
 
@@ -73,6 +106,7 @@ export class TranscriptionWorker {
       const reason = "video audio track could not be extracted";
       await this.store.markMediaStatus(job.instance, job.messageId, "failed", reason);
       await this.store.upsertTranscriptionStatus(job.instance, job.messageId, "failed", reason);
+      logger.error("transcription_video_audio_extract_failed", { instance: job.instance, messageId: job.messageId, reason });
       throw new Error(reason);
     }
 
@@ -91,13 +125,16 @@ export class TranscriptionWorker {
         model: out.model,
         transcript: out.text,
         segments: out.segments,
-        raw: out.raw
+        raw: out.raw,
+        durationSeconds: out.durationSeconds
       });
       await this.store.markMediaStatus(job.instance, job.messageId, "transcribed");
+      logger.info("transcription_job_completed", { instance: job.instance, messageId: job.messageId, provider: out.provider });
     } catch (error) {
       const messageText = String((error as Error)?.message || error);
       await this.store.markMediaStatus(job.instance, job.messageId, "failed", messageText);
       await this.store.upsertTranscriptionStatus(job.instance, job.messageId, "failed", messageText);
+      logger.error("transcription_job_failed", { instance: job.instance, messageId: job.messageId, error: messageText });
       throw error;
     }
   }

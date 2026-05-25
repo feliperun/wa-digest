@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { AppConfig } from "../config.js";
-import type { NormalizedMessage } from "../types.js";
+import type { MediaStatus, NormalizedMessage } from "../types.js";
 import { safeFileName, sha256 } from "../utils.js";
 
 export interface ResolvedMedia {
@@ -16,7 +16,10 @@ export interface ResolvedMedia {
 export interface UnavailableMedia {
   ok: false;
   reason: string;
+  status: Extract<MediaStatus, "unavailable" | "failed" | "rejected">;
 }
+
+type FetchWithTimeoutInit = RequestInit & { timeoutMs?: number };
 
 function extensionFromMime(mime?: string): string {
   const value = String(mime || "").toLowerCase();
@@ -31,7 +34,51 @@ function extensionFromMime(mime?: string): string {
   return ".bin";
 }
 
+function rejected(reason: string): UnavailableMedia {
+  return { ok: false, status: "rejected", reason };
+}
+
+function unavailable(reason: string): UnavailableMedia {
+  return { ok: false, status: "unavailable", reason };
+}
+
+function failed(reason: string): UnavailableMedia {
+  return { ok: false, status: "failed", reason };
+}
+
+function baseMime(value?: string): string {
+  return String(value || "")
+    .split(";")[0]
+    .trim()
+    .toLowerCase();
+}
+
+export function isMimeTypeAllowed(mimeType: string | undefined, allowed: string[]): boolean {
+  const mime = baseMime(mimeType);
+  if (!mime) return false;
+  return allowed.some((entry) => {
+    const pattern = baseMime(entry);
+    if (pattern.endsWith("/*")) return mime.startsWith(pattern.slice(0, -1));
+    return mime === pattern;
+  });
+}
+
+function ensureWithinByteLimit(config: AppConfig, bytes: number): UnavailableMedia | undefined {
+  if (bytes > config.maxTranscriptionMediaBytes) {
+    return rejected(`media exceeds MAX_TRANSCRIPTION_MEDIA_BYTES (${bytes} > ${config.maxTranscriptionMediaBytes})`);
+  }
+  return undefined;
+}
+
+async function fetchWithTimeout(url: string, init: FetchWithTimeoutInit = {}): Promise<Response> {
+  const { timeoutMs = 30_000, ...requestInit } = init;
+  const signal = AbortSignal.timeout(timeoutMs);
+  return fetch(url, { ...requestInit, signal });
+}
+
 async function persistMedia(config: AppConfig, message: NormalizedMessage, bytes: Buffer, source: ResolvedMedia["source"]) {
+  const limit = ensureWithinByteLimit(config, bytes.length);
+  if (limit) return limit;
   const digest = sha256(bytes);
   const day = new Date(message.timestamp * 1000).toISOString().slice(0, 10);
   const fallback = `${message.id}${extensionFromMime(message.media?.mimetype)}`;
@@ -60,13 +107,14 @@ async function fetchEvolutionBase64(config: AppConfig, message: NormalizedMessag
 
   for (const url of urls) {
     try {
-      const res = await fetch(url, {
+      const res = await fetchWithTimeout(url, {
         method: "POST",
         headers: {
           apikey: config.evolutionApiKey,
           "content-type": "application/json"
         },
-        body: JSON.stringify({ message: { key: (message.raw as any)?.data?.key || (message.raw as any)?.key, message: message.media?.rawMessage } })
+        body: JSON.stringify({ message: { key: (message.raw as any)?.data?.key || (message.raw as any)?.key, message: message.media?.rawMessage } }),
+        timeoutMs: config.mediaDownloadTimeoutMs
       });
       if (!res.ok) continue;
       const data: any = await res.json();
@@ -80,20 +128,30 @@ async function fetchEvolutionBase64(config: AppConfig, message: NormalizedMessag
 }
 
 export async function resolveMedia(config: AppConfig, message: NormalizedMessage): Promise<ResolvedMedia | UnavailableMedia> {
-  if (!message.media || message.mediaKind === "text") return { ok: false, reason: "message has no media" };
+  if (!message.media || message.mediaKind === "text") return unavailable("message has no media");
+  if (!isMimeTypeAllowed(message.media.mimetype, config.transcriptionAllowedMimeTypes)) {
+    return rejected(`mimetype is not allowed for transcription: ${message.media.mimetype || "missing"}`);
+  }
+
   if (message.media.base64) {
     return persistMedia(config, message, Buffer.from(message.media.base64, "base64"), "webhook_base64");
   }
 
+  let downloadFailure: string | undefined;
   if (message.media.mediaUrl) {
     try {
-      const res = await fetch(message.media.mediaUrl);
+      const res = await fetchWithTimeout(message.media.mediaUrl, { timeoutMs: config.mediaDownloadTimeoutMs });
       if (res.ok) {
+        const contentLength = Number(res.headers.get("content-length") || 0);
+        const limit = contentLength > 0 ? ensureWithinByteLimit(config, contentLength) : undefined;
+        if (limit) return limit;
         const bytes = Buffer.from(await res.arrayBuffer());
         return persistMedia(config, message, bytes, "media_url");
       }
-    } catch {
-      // Fall through to Evolution API.
+    } catch (error) {
+      if ((error as Error)?.name === "TimeoutError") {
+        downloadFailure = `mediaUrl download timed out after ${config.mediaDownloadTimeoutMs}ms`;
+      }
     }
   }
 
@@ -102,8 +160,6 @@ export async function resolveMedia(config: AppConfig, message: NormalizedMessage
     return persistMedia(config, message, fromEvolution, "evolution_get_base64");
   }
 
-  return {
-    ok: false,
-    reason: "media unavailable through webhook base64, mediaUrl, or public Evolution getBase64 endpoint"
-  };
+  if (downloadFailure) return failed(downloadFailure);
+  return unavailable("media unavailable through webhook base64, mediaUrl, or public Evolution getBase64 endpoint");
 }
