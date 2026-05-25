@@ -2,7 +2,7 @@
   "packages": {
     ".": {
       "release-type": "node",
-      "package-name": "evolution-media-digest"
+      "package-name": "wa-digest"
     }
   }
 }

@@ -1,4 +1,4 @@
-# Evolution Media Digest Extension
+# WA Digest Extension
 
 ## Summary
 
@@ -6,7 +6,7 @@ Projeto open source separado, em **Node/TypeScript**, que roda ao lado da Evolut
 
 **Separação de responsabilidades:**
 
-- **`evolution-media-digest` (este projeto, público)**: camada de captura, transcrição e organização. Devolve transcrições estruturadas e timelines normalizadas. Sem opinião sobre síntese.
+- **`wa-digest` (este projeto, público)**: camada de captura, transcrição e organização. Devolve transcrições estruturadas e timelines normalizadas. Sem opinião sobre síntese.
 - **Skill OpenClaw (privado, fora deste repo)**: contém os templates de sumarização/síntese por grupo, prompts, regras de formatação e tom. Consome o JSON do serviço e produz a resposta final via LLM.
 
 A Evolution continua como backbone de backup/contexto. Baileys direto não será usado no v1; só entraria futuramente como adaptador avançado se uma versão pública da Evolution não expuser mídia antiga.
@@ -45,7 +45,7 @@ Objetivo: provar o fluxo ponta-a-ponta com um grupo real.
 
 ### Repositório
 
-- Repositório próprio `evolution-media-digest` com:
+- Repositório próprio `wa-digest` com:
   - serviço HTTP;
   - CLI `digestctl` (Fase 3);
   - Docker image;

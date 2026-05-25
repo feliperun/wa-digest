@@ -1,6 +1,6 @@
 services:
-  evolution-media-digest:
-    image: ghcr.io/feliperun/evolution-media-digest:latest
+  wa-digest:
+    image: ghcr.io/feliperun/wa-digest:latest
     restart: unless-stopped
     ports:
       - "127.0.0.1:3897:3897"
@@ -20,14 +20,14 @@ services:
       VISION_MODEL: "${VISION_MODEL:-gpt-4.1-mini}"
       OPENCLAW_COMPAT: "true"
     volumes:
-      - evolution_media_digest_data:/data
+      - wa_digest_data:/data
 
   watchtower:
     image: containrrr/watchtower
     restart: unless-stopped
-    command: --interval 3600 --cleanup evolution-media-digest
+    command: --interval 3600 --cleanup wa-digest
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
-  evolution_media_digest_data:
+  wa_digest_data:

@@ -25,7 +25,7 @@ async function doctor() {
 }
 
 async function update() {
-  const packageName = process.env.DIGEST_UPDATE_PACKAGE || "evolution-media-digest";
+  const packageName = process.env.DIGEST_UPDATE_PACKAGE || "wa-digest";
   const manager = process.env.DIGEST_UPDATE_MANAGER || "npm";
   const args = manager === "pnpm" ? ["add", "-g", packageName] : ["install", "-g", packageName];
   const result = spawnSync(manager, args, { stdio: "inherit" });

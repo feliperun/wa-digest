@@ -1,15 +1,15 @@
 {
-  "name": "evolution-media-digest",
+  "name": "wa-digest",
   "version": "0.1.0",
-  "description": "Companion media digest service for Evolution API webhooks and agent-ready WhatsApp summaries.",
+  "description": "Companion digest service for Evolution API webhooks and agent-ready WhatsApp timelines.",
   "type": "module",
-  "homepage": "https://github.com/feliperun/evolution-media-digest#readme",
+  "homepage": "https://github.com/feliperun/wa-digest#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/feliperun/evolution-media-digest.git"
+    "url": "git+https://github.com/feliperun/wa-digest.git"
   },
   "bugs": {
-    "url": "https://github.com/feliperun/evolution-media-digest/issues"
+    "url": "https://github.com/feliperun/wa-digest/issues"
   },
   "bin": {
     "digestctl": "./dist/cli.js"

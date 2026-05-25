@@ -1,6 +1,6 @@
-# Evolution Media Digest
+# WA Digest
 
-Open source companion extension for [Evolution API](https://github.com/EvolutionAPI/evolution-api) that turns WhatsApp text and media webhooks into agent-ready JSON digests.
+Open source companion extension for [Evolution API](https://github.com/EvolutionAPI/evolution-api) that turns WhatsApp text and media webhooks into agent-ready JSON timelines.
 
 It is designed for OpenClaw/Ford, but the HTTP API is generic and can be consumed by any agent runtime.
 
@@ -107,4 +107,4 @@ The example includes Watchtower for auto-updates when using the GHCR image.
 
 ## OpenClaw
 
-Use the included skill instructions in `openclaw/skills/evolution-media-digest/SKILL.md`. The skill should call this service and consume the JSON digest; it should not download or transcribe WhatsApp media directly.
+Use the included skill instructions in `openclaw/skills/wa-digest/SKILL.md`. The skill should call this service and consume the JSON timeline/digest; it should not download or transcribe WhatsApp media directly.

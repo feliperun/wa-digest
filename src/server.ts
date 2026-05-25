@@ -24,7 +24,7 @@ export function createApp() {
   }
 
   app.get("/healthz", (_req, res) => {
-    res.json({ ok: true, service: "evolution-media-digest", ts: new Date().toISOString() });
+    res.json({ ok: true, service: "wa-digest", ts: new Date().toISOString() });
   });
 
   app.use(requireAuth);
@@ -115,6 +115,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const config = loadConfig();
   createApp().listen(config.port, () => {
     // eslint-disable-next-line no-console
-    console.log(`evolution-media-digest listening on ${config.port}`);
+    console.log(`wa-digest listening on ${config.port}`);
   });
 }
