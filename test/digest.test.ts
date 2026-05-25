@@ -1,16 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildDigest } from "../src/digest/summarizer.js";
+import { buildCorpusDigest } from "../src/digest/corpus.js";
 
-test("builds deterministic digest from stored messages", () => {
-  const digest = buildDigest("120@g.us", 24, [
+test("builds corpus digest without synthesis fields", () => {
+  const digest = buildCorpusDigest("100000000000000001@g.us", 24, [
     {
       id: "1",
-      instance: "monitor",
-      chatJid: "120@g.us",
+      instance: "test-instance",
+      chatJid: "100000000000000001@g.us",
       fromMe: false,
       timestamp: Math.floor(Date.now() / 1000),
-      text: "Precisamos marcar a reunião e resolver pendente do contrato",
+      text: "Mensagem sintética para corpus estruturado",
       mediaKind: "text",
       raw: {},
       receivedAt: new Date().toISOString()
@@ -19,6 +19,7 @@ test("builds deterministic digest from stored messages", () => {
 
   assert.equal(digest.ok, true);
   assert.equal(digest.messageCount, 1);
-  assert.equal(digest.pending.length, 1);
+  assert.equal("summary" in digest, false);
+  assert.equal("topics" in digest, false);
   assert.equal(digest.timeline[0].mediaStatus, "none");
 });

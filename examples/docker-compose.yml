@@ -10,14 +10,35 @@ services:
       EVOLUTION_BASE_URL: "${EVOLUTION_BASE_URL:-http://evolution-api:8080}"
       EVOLUTION_API_KEY: "${EVOLUTION_API_KEY}"
       EVOLUTION_INSTANCE: "${EVOLUTION_INSTANCE:-monitor}"
+      DATABASE_URL: "${DATABASE_URL}"
       MEDIA_STORAGE_DIR: "/data"
       TRANSCRIBER_PROVIDER: "${TRANSCRIBER_PROVIDER:-soniox}"
       SONIOX_API_KEY: "${SONIOX_API_KEY}"
       SONIOX_MODEL: "${SONIOX_MODEL:-stt-async-v4}"
+      MAX_CONCURRENT_TRANSCRIPTIONS: "${MAX_CONCURRENT_TRANSCRIPTIONS:-2}"
       VISION_PROVIDER: "${VISION_PROVIDER:-metadata}"
       VISION_BASE_URL: "${VISION_BASE_URL:-}"
       VISION_API_KEY: "${VISION_API_KEY:-}"
       VISION_MODEL: "${VISION_MODEL:-gpt-4.1-mini}"
+      OPENCLAW_COMPAT: "true"
+    volumes:
+      - wa_digest_data:/data
+
+  wa-digest-worker:
+    image: ghcr.io/feliperun/wa-digest:latest
+    restart: unless-stopped
+    command: ["node", "dist/cli.js", "worker"]
+    environment:
+      DIGEST_API_TOKEN: "${DIGEST_API_TOKEN}"
+      EVOLUTION_BASE_URL: "${EVOLUTION_BASE_URL:-http://evolution-api:8080}"
+      EVOLUTION_API_KEY: "${EVOLUTION_API_KEY}"
+      EVOLUTION_INSTANCE: "${EVOLUTION_INSTANCE:-monitor}"
+      DATABASE_URL: "${DATABASE_URL}"
+      MEDIA_STORAGE_DIR: "/data"
+      TRANSCRIBER_PROVIDER: "${TRANSCRIBER_PROVIDER:-soniox}"
+      SONIOX_API_KEY: "${SONIOX_API_KEY}"
+      SONIOX_MODEL: "${SONIOX_MODEL:-stt-async-v4}"
+      MAX_CONCURRENT_TRANSCRIPTIONS: "${MAX_CONCURRENT_TRANSCRIPTIONS:-2}"
       OPENCLAW_COMPAT: "true"
     volumes:
       - wa_digest_data:/data

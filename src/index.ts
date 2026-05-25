@@ -1,7 +1,10 @@
 export { createApp } from "./server.js";
 export { loadConfig } from "./config.js";
+export { runDigestMigrations, migrateDatabase } from "./db/migrations.js";
 export { normalizeEvolutionWebhook } from "./evolution/parser.js";
 export { resolveMedia } from "./media/resolver.js";
 export { MediaInterpreterController } from "./media/interpreter.js";
+export { PgStore } from "./store/pg-store.js";
 export { TranscriberController } from "./transcription/controller.js";
+export { TranscriptionWorker } from "./worker/transcription-worker.js";
 export type * from "./types.js";

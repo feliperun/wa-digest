@@ -15,41 +15,40 @@ A Evolution continua como backbone de backup/contexto. Baileys direto não será
 
 ## Estado atual do repositório
 
-O repositório contém um **protótipo scaffoldado**, não a Fase 1 final.
+O repositório já contém o caminho crítico da **Fase 1** para ingestão, persistência e transcrição assíncrona. Ainda há trabalho de produto/operacional para Fase 2+.
 
 Já existe:
 
 - serviço HTTP básico com `POST /v1/evolution/webhook/:instance`;
 - parser inicial de webhook Evolution;
-- store local JSON para desenvolvimento;
+- persistência Postgres no schema `digest` com `digest.messages`, `digest.media` e `digest.transcriptions`;
+- comando idempotente `wa-digest migrate`;
+- fila `pg-boss` no schema `digest`;
+- worker de transcrição para áudio/vídeo usando `TranscriberController`;
 - resolver de mídia por `webhookBase64`, `mediaUrl` e endpoints públicos `getBase64` quando existirem;
 - facade de transcrição com provider Soniox inicial;
-- CLI `wa-digest`/`digestctl` com `init`, `doctor`, `update` e stubs explícitos para `migrate`/`import-whatsapp-zip`;
+- CLI `wa-digest`/`digestctl` com `init`, `doctor`, `migrate`, `worker`, `update` e stub explícito para `import-whatsapp-zip`;
 - Dockerfile, exemplo de Docker Compose, GitHub Actions, Release Please, Sentrux, AGENTS e ADR harness;
-- testes básicos para parser, digest determinístico e ingestão webhook.
+- testes para parser, ingestão idempotente, corpus sem síntese, falha de provider e worker.
 
 Ainda não existe:
 
-- Postgres no schema `digest`;
-- migrações idempotentes;
-- fila/worker `pg-boss`;
-- transcrição assíncrona fora do webhook;
 - corpus multi-grupo/collections;
 - backfill do Postgres da Evolution;
 - importador real do ZIP oficial do WhatsApp;
 - export `jsonl|markdown|text`;
-- remoção completa da síntese determinística do protótipo.
+- paginação/cursor para payloads grandes;
+- limites reais de custo/duração por instância.
 
 ## Por onde começar
 
-O próximo trabalho deve transformar o scaffold no contrato real da Fase 1:
+O próximo trabalho deve aprofundar a Fase 1 e preparar Fase 2:
 
-1. **Persistência Postgres**: substituir `JsonStore` por `digest.messages`, `digest.media` e `digest.transcriptions`.
-2. **Migrações**: adicionar runner idempotente para criar apenas objetos no schema `digest`; ligar ao comando `wa-digest migrate`.
-3. **Fila/worker**: adicionar `pg-boss`; webhook deve validar, persistir mensagem/job e responder 2xx rapidamente.
-4. **Worker de transcrição**: mover resolução/transcrição de mídia para worker com retry/backoff e status explícito.
-5. **Contrato do endpoint**: ajustar `GET /v1/groups/:jid/digest` para retornar timeline/transcrições/status, sem síntese final.
-6. **Testes de Fase 1**: cobrir webhook duplicado, provider em falha, job processado e status parcial.
+1. Adicionar limites de tamanho/duração/custo para transcrição.
+2. Adicionar paginação/cursor em endpoints de corpus grandes.
+3. Implementar collections e exports `jsonl|markdown|text`.
+4. Implementar backfill best-effort a partir do Postgres da Evolution.
+5. Implementar importador do ZIP oficial do WhatsApp.
 
 ## Cadência de desenvolvimento
 
@@ -355,13 +354,9 @@ Não há promessa de "sync completo de mídia antiga" via Evolution/Baileys. Há
 - Importar ZIP oficial traz risco de duplicação com mensagens já capturadas por Evolution. O importador precisa deduplicar por heurística quando não houver `messageId` original: timestamp + sender + texto + nome de mídia.
 - Export oficial do WhatsApp tem limites próprios por plataforma/tamanho. A documentação deve posicionar ZIP import como "mais confiável para acervo local", não como garantia absoluta de todo o histórico.
 
-### Divergências do protótipo atual que precisam ser corrigidas
+### Divergências restantes que precisam ser corrigidas
 
-- O protótipo atual usa JSON local; o plano agora exige Postgres no schema `digest`.
-- O protótipo atual produz um resumo determinístico no serviço; isso deve sair ou virar apenas metadado opcional de debug. A síntese final é da skill.
 - O protótipo atual já inclui CLI, release-please e listagem de grupos; pelo plano, isso é Fase 3. Pode permanecer no repo como antecipação, mas não deve bloquear o MVP.
-- O protótipo atual inclui interpretação visual e frame de vídeo; o plano corta frame de vídeo e empurra imagem para Fase 2.
-- O protótipo atual processa mídia dentro da requisição do webhook; o plano correto é persistir/enfileirar e processar em worker.
 - O protótipo atual não tem collections/corpus multi-grupo.
 - O protótipo atual não tem backfill do Postgres da Evolution nem importador de ZIP oficial do WhatsApp.
 
@@ -369,11 +364,9 @@ Não há promessa de "sync completo de mídia antiga" via Evolution/Baileys. Há
 
 Refatorar o protótipo para o contrato da Fase 1:
 
-1. Trocar `JsonStore` por Postgres (`digest.messages`, `digest.media`, `digest.transcriptions`).
-2. Introduzir fila `pg-boss` e worker de transcrição.
-3. Remover síntese do `buildDigest`; retornar timeline estruturada com status.
-4. Remover análise de frames de vídeo; vídeo vira extração de áudio.
-5. Adicionar collections e export de corpus multi-grupo.
-6. Adicionar backfill best-effort a partir do Postgres da Evolution.
-7. Adicionar importador de ZIP oficial do WhatsApp para acervo histórico com mídia.
-8. Manter Docker/CI já criados, mas ajustar docs para deixar claro o escopo Fase 1.
+1. Adicionar limites de tamanho/duração/custo para mídia transcrita.
+2. Adicionar paginação/cursor ao corpus.
+3. Adicionar collections e export de corpus multi-grupo.
+4. Adicionar backfill best-effort a partir do Postgres da Evolution.
+5. Adicionar importador de ZIP oficial do WhatsApp para acervo histórico com mídia.
+6. Manter Docker/CI ajustados ao escopo Fase 1.

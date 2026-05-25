@@ -2,14 +2,14 @@
 
 ## Current Status
 
-WA Digest is currently a scaffold/prototype. It is useful for validating the HTTP shape, webhook parsing, provider facades, packaging, and docs harness. The production Fase 1 work starts by replacing the local JSON store with Postgres schema `digest` and moving media processing into a `pg-boss` worker.
+WA Digest now has the Fase 1 persistence and worker path: webhook ingest stores normalized messages in Postgres schema `digest`, enqueues audio/video transcription through `pg-boss`, and exposes a structured corpus endpoint without final synthesis.
 
 Start with:
 
 1. Read [PLAN.md](PLAN.md), especially "Estado atual do repositório" and "Por onde começar".
 2. Read [AGENTS.md](../AGENTS.md).
 3. Run the local checks.
-4. Implement the Fase 1 persistence/worker path.
+4. Keep changes aligned with the Postgres/worker boundary.
 
 ## Prerequisites
 
@@ -24,7 +24,14 @@ Start with:
 ```bash
 npm install
 cp .env.example .env
+npm run migrate
 npm run dev
+```
+
+Run the worker in another shell when testing transcription:
+
+```bash
+npm run worker
 ```
 
 Healthcheck:

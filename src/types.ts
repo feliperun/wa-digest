@@ -1,6 +1,6 @@
 export type MediaKind = "text" | "audio" | "image" | "video" | "document" | "unknown";
 
-export type MediaStatus = "none" | "pending" | "available" | "processed" | "unavailable" | "failed";
+export type MediaStatus = "none" | "processing" | "transcribed" | "metadata_only" | "unavailable" | "failed";
 
 export interface NormalizedMessage {
   id: string;
@@ -27,7 +27,13 @@ export interface StoredMessage extends NormalizedMessage {
   receivedAt: string;
 }
 
+export interface SaveMessageResult {
+  message: StoredMessage;
+  inserted: boolean;
+}
+
 export interface MediaAnalysis {
+  instance: string;
   messageId: string;
   chatJid: string;
   status: MediaStatus;
@@ -36,7 +42,6 @@ export interface MediaAnalysis {
   transcript?: string;
   visualDescription?: string;
   ocrText?: string;
-  summary?: string;
   artifacts?: Record<string, string>;
   modelMeta?: Record<string, unknown>;
   error?: string;
@@ -50,21 +55,40 @@ export interface DigestResponse {
   messageCount: number;
   mediaCount: number;
   generatedAt: string;
-  summary: string;
-  topics: string[];
-  decisions: string[];
-  pending: string[];
+  status: {
+    state: "complete" | "partial";
+    processing: number;
+    transcribed: number;
+    metadataOnly: number;
+    unavailable: number;
+    failed: number;
+  };
   timeline: Array<{
     id: string;
+    instance: string;
     timestamp: number;
     senderName?: string;
+    participantJid?: string;
     fromMe: boolean;
     text: string;
     mediaKind: MediaKind;
     mediaStatus: MediaStatus;
-    transcript?: string;
-    visualDescription?: string;
-    error?: string;
+    media?: {
+      mimetype?: string;
+      fileName?: string;
+      storagePath?: string;
+      source?: string;
+      sha256?: string;
+      bytes?: number;
+      error?: string;
+    };
+    transcription?: {
+      status: MediaStatus;
+      text?: string;
+      provider?: string;
+      model?: string;
+      error?: string;
+    };
   }>;
 }
 

@@ -8,11 +8,13 @@ It is designed for OpenClaw/Ford, but the HTTP API is generic and can be consume
 
 - Runs beside Evolution API. It does not patch or fork Evolution.
 - Receives `MESSAGES_UPSERT` webhooks.
-- Stores normalized messages and media analysis under `MEDIA_STORAGE_DIR`.
+- Stores normalized messages, media state, and transcriptions in Postgres schema `digest`.
+- Uses `pg-boss` in the same schema for transcription jobs.
 - Resolves media from webhook base64, `mediaUrl`, or public Evolution `getBase64` endpoints when available.
 - Marks old encrypted media as unavailable when Evolution cannot expose the bytes through public APIs.
 - Transcribes audio through a provider facade. The initial provider is Soniox via the official Node SDK.
-- Interprets images/video frames through a vision provider facade, with a metadata fallback.
+- Treats video as audio for transcription. Frame analysis and image OCR are outside the Fase 1 path.
+- Returns structured corpus/timeline JSON. It does not perform final synthesis or summarization.
 
 Project docs:
 
@@ -42,7 +44,14 @@ For local development from a clone:
 cp .env.example .env
 npm install
 npm run build
+npm run migrate
 npm start
+```
+
+Run the transcription worker in a separate process:
+
+```bash
+npm run worker
 ```
 
 Healthcheck:
@@ -90,6 +99,8 @@ All `/v1/*` endpoints require:
 Authorization: Bearer <DIGEST_API_TOKEN>
 ```
 
+`GET /v1/groups/:jid/digest` returns a structured corpus package with `timeline`, per-item media/transcription status, and aggregate `status.state` (`complete` or `partial`). It intentionally omits final summary fields; downstream agents own synthesis.
+
 ## Transcription Providers
 
 Set:
@@ -104,30 +115,19 @@ The provider facade also reserves `openai-compatible`, `mistral`, `voxtral`, `lo
 
 Soniox SDK reference: https://soniox.com/docs/sdk/node-SDK
 
-## Vision Providers
-
-Default:
-
-```text
-VISION_PROVIDER=metadata
-```
-
-Optional OpenAI-compatible vision:
-
-```text
-VISION_PROVIDER=openai-compatible
-VISION_BASE_URL=https://api.openai.com/v1
-VISION_API_KEY=...
-VISION_MODEL=gpt-4.1-mini
-```
-
 ## Docker
 
 ```bash
 docker compose -f examples/docker-compose.yml --env-file .env up -d
 ```
 
-The example includes Watchtower for auto-updates when using the GHCR image.
+Before first start or after upgrades, run the idempotent migration:
+
+```bash
+docker compose -f examples/docker-compose.yml --env-file .env run --rm wa-digest node dist/cli.js migrate
+```
+
+The example starts the HTTP service and a separate worker, and includes Watchtower for auto-updates when using the GHCR image.
 
 ## OpenClaw
 

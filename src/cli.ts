@@ -3,6 +3,8 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { loadConfig } from "./config.js";
+import { migrateDatabase } from "./db/migrations.js";
+import { startTranscriptionWorker } from "./worker/runner.js";
 
 const ENV_TEMPLATE = `PORT=3897
 DIGEST_API_TOKEN=change-me
@@ -20,6 +22,7 @@ SONIOX_MODEL=stt-async-v4
 
 VISION_PROVIDER=metadata
 OPENCLAW_COMPAT=true
+MAX_CONCURRENT_TRANSCRIPTIONS=2
 `;
 
 const COMPOSE_TEMPLATE = `services:
@@ -88,6 +91,7 @@ async function doctor() {
   const config = loadConfig();
   const checks = [
     ["DIGEST_API_TOKEN", Boolean(config.apiToken)],
+    ["DATABASE_URL", Boolean(config.databaseUrl)],
     ["MEDIA_STORAGE_DIR", Boolean(config.mediaStorageDir)],
     ["TRANSCRIBER_PROVIDER", Boolean(config.transcriberProvider)],
     ["SONIOX_API_KEY", config.transcriberProvider !== "soniox" || Boolean(config.sonioxApiKey)],
@@ -107,16 +111,10 @@ async function doctor() {
 }
 
 async function migrate() {
+  const config = loadConfig();
+  await migrateDatabase(config);
   // eslint-disable-next-line no-console
-  console.log(`Migration command is planned but not implemented in the prototype.
-
-Target behavior:
-  - connect to DATABASE_URL
-  - create schema digest
-  - apply idempotent migrations only under digest.*
-
-For now, track the production migration design in docs/PLAN.md and ADR-0002.`);
-  process.exitCode = 2;
+  console.log("ok migrated digest schema");
 }
 
 async function importWhatsappZip() {
@@ -128,7 +126,7 @@ async function importWhatsappZip() {
     return;
   }
   // eslint-disable-next-line no-console
-  console.log(`WhatsApp ZIP import is planned but not implemented in the prototype.
+  console.log(`WhatsApp ZIP import is planned but not implemented yet.
 
 Requested archive: ${zipPath}
 
@@ -149,11 +147,25 @@ async function update() {
   process.exitCode = result.status || 0;
 }
 
+async function worker() {
+  const config = loadConfig();
+  const running = await startTranscriptionWorker(config);
+  // eslint-disable-next-line no-console
+  console.log("wa-digest transcription worker started");
+  const stop = async () => {
+    await running.stop();
+    process.exit(0);
+  };
+  process.once("SIGINT", () => void stop());
+  process.once("SIGTERM", () => void stop());
+}
+
 async function main() {
   const command = process.argv[2] || "help";
   if (command === "init") return init();
   if (command === "doctor") return doctor();
   if (command === "migrate") return migrate();
+  if (command === "worker") return worker();
   if (command === "import-whatsapp-zip") return importWhatsappZip();
   if (command === "update") return update();
   // eslint-disable-next-line no-console
@@ -161,6 +173,7 @@ async function main() {
   wa-digest init [--force]
   wa-digest doctor
   wa-digest migrate
+  wa-digest worker
   wa-digest import-whatsapp-zip <archive.zip> --chat <jid-or-name> --instance <instance>
   wa-digest update
 
@@ -170,7 +183,7 @@ npx examples:
   npx wa-digest@latest import-whatsapp-zip ./chat.zip --chat "CTO Real" --instance monitor
 
 Environment:
-  DIGEST_API_TOKEN, EVOLUTION_BASE_URL, EVOLUTION_API_KEY, MEDIA_STORAGE_DIR
+  DIGEST_API_TOKEN, DATABASE_URL, EVOLUTION_BASE_URL, EVOLUTION_API_KEY, MEDIA_STORAGE_DIR
   TRANSCRIBER_PROVIDER=soniox, SONIOX_API_KEY
   VISION_PROVIDER=metadata|openai-compatible`);
 }
